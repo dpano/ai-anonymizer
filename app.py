@@ -6,16 +6,31 @@ from pathlib import Path
 from io import BytesIO
 
 app = Flask(__name__)
-mapping = {"by_type": {}, "reverse": {}, "words": [], "word_map": {}, "exclusions": []}
+
+# Projects store: { project_name: mapping_dict }
+store = {
+    "projects": {"default": {"by_type": {}, "reverse": {}, "words": [], "word_map": {}, "exclusions": []}},
+    "active_project": "default"
+}
+
 MAPPING_FILE = Path("mapping_state.json")
 PLACE_FMT = "ANON_{type}_{n}"
 
 def save_to_disk():
     with open(MAPPING_FILE, "w") as f:
-        json.dump(mapping, f, indent=2)
+        json.dump(store, f, indent=2)
+
+def get_mapping():
+    active = store.get("active_project", "default")
+    if active not in store["projects"]:
+        store["projects"][active] = {"by_type": {}, "reverse": {}, "words": [], "word_map": {}, "exclusions": []}
+    return store["projects"][active]
 
 if MAPPING_FILE.exists():
-    try: mapping.update(json.loads(MAPPING_FILE.read_text()))
+    try:
+        data = json.loads(MAPPING_FILE.read_text())
+        if "projects" in data:
+            store.update(data)
     except: pass
 
 PATTERNS = [
@@ -97,46 +112,114 @@ def deanonymize_text(text, mapping_obj):
 
 HTML = """<!doctype html>
 <html><head><meta charset="utf-8"><title>Anonymizer UI</title><style>
-body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:12px} .container{display:grid;grid-template-columns:1fr 1fr 280px;gap:12px;align-items:start}
+body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;display:flex;height:100vh;overflow:hidden}
+.sidebar{width:240px;background:#f5f5f5;border-right:1px solid #ddd;display:flex;flex-direction:column;transition:margin-left 0.3s}
+.sidebar.collapsed{margin-left:-240px}
+.sidebar-header{padding:12px;font-weight:bold;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center}
+.project-list{flex:1;overflow-y:auto;padding:8px}
+.project-item{padding:8px;margin-bottom:4px;cursor:pointer;border-radius:4px;display:flex;justify-content:space-between;align-items:center}
+.project-item:hover{background:#e0e0e0}
+.project-item.active{background:#0078d4;color:white}
+.main-content{flex:1;display:flex;flex-direction:column;padding:12px;overflow:hidden}
+.container{display:grid;grid-template-columns:1fr 1fr 280px;gap:12px;flex:1;overflow:hidden}
 textarea{width:100%;height:70vh;font-family:monospace;font-size:13px;padding:8px;box-sizing:border-box}
 .controls{display:flex;gap:8px;margin-bottom:8px}button{padding:6px 10px}.right-col{display:flex;flex-direction:column}.small{font-size:12px;color:#444;margin-top:6px}
+.btn-del{background:none;border:none;color:inherit;cursor:pointer;font-weight:bold;padding:0 4px}
+.btn-del:hover{color:#ff4d4d}
 </style></head><body>
-<h2>Text & Code Anonymizer — Local UI</h2>
-<div class="controls">
-  <button id="anon">Anonymize →</button>
-  <button id="deanon">← Deanonymize</button>
-  <button id="download">Download mapping</button>
-  <input type="file" id="loadmap" style="display:none"/>
-  <button id="loadbtn">Load mapping JSON</button>
-  <button id="clear">Clear mapping</button>
+<div id="sidebar" class="sidebar">
+  <div class="sidebar-header"><span>Projects</span></div>
+  <div id="project-list" class="project-list"></div>
+  <div style="padding:12px;border-top:1px solid #ddd">
+    <input id="new-project" type="text" placeholder="New project..." style="width:100%;margin-bottom:8px;padding:4px;box-sizing:border-box">
+    <button id="add-project" style="width:100%">+ Add Project</button>
+  </div>
 </div>
-<div class="container">
-  <div><label><strong>Input</strong></label><textarea id="input" spellcheck="false">// paste text or code here</textarea></div>
-  <div><label><strong>Output</strong></label><textarea id="output" spellcheck="false">// anonymized or de-anonymized result</textarea></div>
-  <div class="right-col">
-    <label><strong>Custom words/names (one per line, case-insensitive)</strong></label>
-    <textarea id="words" spellcheck="false"></textarea>
-    <label style="margin-top:12px"><strong>Exclusions / Allow-list (no mask)</strong></label>
-    <textarea id="exclusions" style="height:20vh" spellcheck="false" placeholder="e.g. mission_id"></textarea>
-    <div class="small">Add sensitive names, brands, or projects then press Anonymize. Mapping persists across runs.</div>
+<div class="main-content">
+  <div class="controls">
+    <button id="toggle-sb">☰</button>
+    <button id="anon">Anonymize →</button>
+    <button id="deanon">← Deanonymize</button>
+    <button id="download">Download mapping</button>
+    <input type="file" id="loadmap" style="display:none"/>
+    <button id="loadbtn">Load JSON</button>
+    <button id="clear">Clear Mapping</button>
+    <span id="active-name" style="margin-left:auto;font-weight:bold;align-self:center;color:#0078d4"></span>
+  </div>
+  <div class="container">
+    <div><label><strong>Input</strong></label><textarea id="input" spellcheck="false"></textarea></div>
+    <div><label><strong>Output</strong></label><textarea id="output" spellcheck="false"></textarea></div>
+    <div class="right-col">
+      <label><strong>Custom words</strong></label>
+      <textarea id="words" spellcheck="false" style="height:30vh"></textarea>
+      <label style="margin-top:12px"><strong>Exclusions</strong></label>
+      <textarea id="exclusions" style="height:30vh" spellcheck="false"></textarea>
+      <div class="small">Settings are saved per project to browser storage and disk.</div>
+    </div>
   </div>
 </div>
 <script>
 async function post(path, body){ const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); return r.json(); }
-window.onload = async () => {
-  const localWords = localStorage.getItem('anon_words');
-  const localExs = localStorage.getItem('anon_exs');
-  if(localWords) document.getElementById('words').value = localWords;
-  if(localExs) document.getElementById('exclusions').value = localExs;
 
+let currentProject = 'default';
+
+async function loadState() {
   const state = await (await fetch('/get_state')).json();
-  if(state.last_input) document.getElementById('input').value = state.last_input;
-  if(state.last_output) document.getElementById('output').value = state.last_output;
+  const mapping = state.mapping;
+  currentProject = state.active_project;
 
+  document.getElementById('input').value = mapping.last_input || '';
+  document.getElementById('output').value = mapping.last_output || '';
+  document.getElementById('active-name').textContent = `Project: ${currentProject}`;
+
+  // Load words/exclusions from localStorage based on project name
+  document.getElementById('words').value = localStorage.getItem(`words_${currentProject}`) || '';
+  document.getElementById('exclusions').value = localStorage.getItem(`exs_${currentProject}`) || '';
+  
+  renderProjects(state.projects);
+}
+
+function renderProjects(projects) {
+  const list = document.getElementById('project-list');
+  list.innerHTML = '';
+  Object.keys(projects).forEach(name => {
+    const div = document.createElement('div');
+    div.className = `project-item ${name === currentProject ? 'active' : ''}`;
+    div.onclick = () => switchProject(name);
+    div.innerHTML = `<span>${name}</span>${name !== 'default' ? `<button class="btn-del" onclick="event.stopPropagation(); deleteProject('${name}')">×</button>` : ''}`;
+    list.appendChild(div);
+  });
+}
+
+async function switchProject(name) {
+  await post('/switch_project', {name});
+  await loadState();
+}
+
+async function addProject() {
+  const name = document.getElementById('new-project').value.trim();
+  if(!name) return;
+  await post('/add_project', {name});
+  document.getElementById('new-project').value = '';
+  await loadState();
+}
+
+async function deleteProject(name) {
+  if(!confirm(`Delete project "${name}"?`)) return;
+  await post('/delete_project', {name});
+  await loadState();
+}
+
+window.onload = async () => {
+  await loadState();
   const w=document.getElementById('words'), ex=document.getElementById('exclusions');
-  const s=()=>{ localStorage.setItem('anon_words', w.value); localStorage.setItem('anon_exs', ex.value); };
+  const s=()=>{ localStorage.setItem(`words_${currentProject}`, w.value); localStorage.setItem(`exs_${currentProject}`, ex.value); };
   w.oninput=s; w.onblur=s; ex.oninput=s; ex.onblur=s;
 };
+
+document.getElementById('toggle-sb').onclick = () => document.getElementById('sidebar').classList.toggle('collapsed');
+document.getElementById('add-project').onclick = addProject;
+
 document.getElementById('anon').onclick = async ()=>{
   const inp = document.getElementById('input').value;
   const words = document.getElementById('words').value.split(/\\r?\\n/).map(s=>s.trim()).filter(Boolean);
@@ -174,26 +257,44 @@ def index():
 
 @app.route('/get_state')
 def get_state():
-    return jsonify(mapping)
+    return jsonify({"mapping": get_mapping(), "projects": store["projects"], "active_project": store["active_project"]})
+
+@app.route('/switch_project', methods=['POST'])
+def switch_project():
+    name = request.get_json().get('name', 'default')
+    store["active_project"] = name
+    save_to_disk()
+    return jsonify({"status": "switched"})
+
+@app.route('/add_project', methods=['POST'])
+def add_project():
+    name = request.get_json().get('name')
+    if name and name not in store["projects"]:
+        store["projects"][name] = {"by_type": {}, "reverse": {}, "words": [], "word_map": {}, "exclusions": []}
+        store["active_project"] = name
+        save_to_disk()
+    return jsonify({"status": "added"})
+
+@app.route('/delete_project', methods=['POST'])
+def delete_project():
+    name = request.get_json().get('name')
+    if name in store["projects"] and name != "default":
+        del store["projects"][name]
+        if store["active_project"] == name:
+            store["active_project"] = "default"
+        save_to_disk()
+    return jsonify({"status": "deleted"})
 
 @app.route('/anonymize', methods=['POST'])
 def api_anonymize():
+    mapping = get_mapping()
     data = request.get_json() or {}
     text = data.get('text', '')
     words = data.get('words', [])
     exclusions = data.get('exclusions', [])
 
-    existing = mapping.get("words", [])
-    for w in words:
-        if not any(x.lower() == w.lower() for x in existing):
-            existing.append(w)
-    mapping["words"] = existing
-
-    existing_ex = mapping.get("exclusions", [])
-    for e in exclusions:
-        if not any(x.lower() == e.lower() for x in existing_ex):
-            existing_ex.append(e)
-    mapping["exclusions"] = existing_ex
+    mapping["words"] = list(set(mapping.get("words", []) + words))
+    mapping["exclusions"] = list(set(mapping.get("exclusions", []) + exclusions))
 
     out = anonymize_text(text, mapping)
     mapping["last_input"] = text
@@ -203,6 +304,7 @@ def api_anonymize():
 
 @app.route('/deanonymize', methods=['POST'])
 def api_deanonymize():
+    mapping = get_mapping()
     data = request.get_json() or {}
     text = data.get('text', '')
     out = deanonymize_text(text, mapping)
@@ -213,6 +315,7 @@ def api_deanonymize():
 
 @app.route('/download_mapping')
 def download_mapping():
+    mapping = get_mapping()
     bio = BytesIO()
     bio.write(json.dumps(mapping, indent=2).encode('utf-8'))
     bio.seek(0)
@@ -220,6 +323,7 @@ def download_mapping():
 
 @app.route('/load_mapping', methods=['POST'])
 def load_mapping_route():
+    mapping = get_mapping()
     data = request.get_json() or {}
     new_map = data.get('mapping')
     if not isinstance(new_map, dict):
@@ -236,9 +340,9 @@ def load_mapping_route():
 
 @app.route('/clear_mapping', methods=['POST'])
 def clear_mapping_route():
-    mapping.clear()
-    mapping.update({"by_type": {}, "reverse": {}, "words": [], "word_map": {}, "exclusions": []})
-    if MAPPING_FILE.exists(): MAPPING_FILE.unlink()
+    active = store["active_project"]
+    store["projects"][active] = {"by_type": {}, "reverse": {}, "words": [], "word_map": {}, "exclusions": []}
+    save_to_disk()
     return jsonify({"status": "cleared"})
 
 if __name__ == '__main__':
