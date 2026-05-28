@@ -46,8 +46,8 @@ PATTERNS = [
     ("UNIXPATH", re.compile(r"(?:/[^ \n\t\"']+)+")),
     ("DOMAIN", re.compile(r"\b(?:[a-zA-Z0-9-]+\.)+(?:com|org|net|io|dev|local|xyz|gov|edu)\b")),
     ("HEXSECRET", re.compile(r"\b[a-fA-F0-9]{32,}\b")),
-    ("USERNAME", re.compile(r"\buser[:=]?[ \t]*([A-Za-z0-9._-]+)\b", re.IGNORECASE)),
-    ("IDNUM", re.compile(r"\bID[:=]?[ \t]*([0-9]{3,})\b", re.IGNORECASE)),
+    ("USERNAME", re.compile(r"\buser(?:[:=]\s*|\s+)([A-Za-z0-9._-]+)\b", re.IGNORECASE)),
+    ("IDNUM", re.compile(r"\bID(?:[:=]\s*|\s+)([0-9]{3,})\b", re.IGNORECASE)),
 ]
 
 def next_name(mapping_obj, typ, original):
@@ -94,7 +94,16 @@ def anonymize_text(text, mapping_obj):
         ex_set = {x.lower() for x in exclusions}
         # Sort all items by length desc to ensure the most specific context (exclusion) is matched first
         all_items = sorted(words + exclusions, key=len, reverse=True)
-        pattern = re.compile("(" + "|".join(re.escape(w) for w in all_items) + ")", re.IGNORECASE)
+        # To allow masking of words within compound identifiers (e.g., 'Employee' in 'EmployeeId'),
+        # we remove the trailing word boundary (\b).
+        # WARNING: This might lead to re-anonymization of already anonymized tokens if a word
+        # in the list is a substring of an ANON_ token (e.g., 'WORD' in 'ANON_WORD_3').
+        # The current implementation relies on the longest-first sorting and the `make_word_token`
+        # function to prevent infinite loops, but partial re-anonymization of tokens is still a risk
+        # if a word like "WORD" is in the custom words list.
+        # For best results with code, consider adding the full identifier (e.g., "EmployeeId")
+        # to the custom words list instead of just the sub-word ("Employee").
+        pattern = re.compile(r"\b(" + "|".join(re.escape(w) for w in all_items) + r")", re.IGNORECASE)
 
         def sub_word(m):
             orig = m.group(0)  # exact matched substring, preserve case
