@@ -4,11 +4,11 @@ A local, web-based utility designed to protect sensitive information and Persona
 
 ## Features
 
-- **Robust PII Detection**: Built-in patterns for Emails, Phone Numbers, Credit Cards, SSN, IBAN, UUIDs, IP addresses, Paths, and more.
+- **Robust PII Detection**: Built-in patterns for Emails, Phone Numbers, Credit Cards, SSN, IBAN, UUIDs, IP addresses, File Paths (code-safe for HTML/XML), Domains, Secrets (Hex), Usernames, and IDs.
 - **Custom Word Masking**: Define specific project names, brand names, or internal identifiers to be masked.
 - **Exclusion/Allow-list**: Prevent specific strings (like `mission_id`) from being masked even if a substring (like `mission`) is in the custom words list.
 - **Reversible Anonymization**: Easily de-anonymize AI responses back to their original form using the saved mapping.
-- **Project-Based Isolation**: Organize your work into different projects, each with its own isolated mapping, custom words, and exclusions.
+- **Project-Based Isolation & Portability**: Organize work into projects with isolated mappings. Export and import mappings as JSON files for backup or sharing.
 - **Multi-Layer Persistence**:
   - **Server-side**: Mappings are saved to `mapping_state.json`.
   - **Client-side**: Custom words and exclusions are saved to browser `localStorage` per project.
@@ -43,6 +43,10 @@ A local, web-based utility designed to protect sensitive information and Persona
    - Click **Anonymize →** to generate the safe version for the AI.
    - Copy the **Output** and use it with your AI assistant.
    - To restore the AI's response, paste it into the **Input** field and click **← Deanonymize**.
+6. **Manage State**:
+   - Use **Download mapping** to export the current project's dictionary.
+   - Use **Load JSON** to restore a previously saved mapping.
+   - Use **Clear Mapping** to reset the current project's state.
 
 ## Data Privacy
 
