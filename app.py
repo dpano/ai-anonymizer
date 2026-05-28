@@ -113,9 +113,7 @@ textarea{width:100%;height:70vh;font-family:monospace;font-size:13px;padding:8px
   <div><label><strong>Output</strong></label><textarea id="output" spellcheck="false">// anonymized or de-anonymized result</textarea></div>
   <div class="right-col">
     <label><strong>Words to mask (one per line, substring match, case-insensitive)</strong></label>
-    <textarea id="words" spellcheck="false">dutyTrips
-AcmeCorp
-ProjectPhoenix</textarea>
+    <textarea id="words" spellcheck="false"></textarea>
     <div class="small">Edit words then press Anonymize. Mapping persists until Clear mapping. Avoid very short common words.</div>
   </div>
 </div>
