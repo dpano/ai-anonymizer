@@ -1,0 +1,58 @@
+{
+  "by_type": {
+    "UNIXPATH": {
+      "/common/http": "<<ANON_UNIXPATH_1>>",
+      "/core": "<<ANON_UNIXPATH_2>>",
+      "/constants/date.formats": "<<ANON_UNIXPATH_3>>",
+      "/models/generated/cima1integration/CiMaCiMa1IntegrationServiceModelsV1Model": "<<ANON_UNIXPATH_4>>",
+      "/models/generated/identity/CiMaSharedServicesIdentityServiceV1DtoModel": "<<ANON_UNIXPATH_5>>",
+      "/components/dutytrip-widget-calendar/MarkedDate": "<<ANON_UNIXPATH_6>>",
+      "/domain/dutytrip.mappers": "<<ANON_UNIXPATH_7>>",
+      "/helpers/string-helper": "<<ANON_UNIXPATH_8>>",
+      "/app/core/interceptors/http.tokens": "<<ANON_UNIXPATH_9>>",
+      "/cima1-menu-mapper.service": "<<ANON_UNIXPATH_10>>",
+      "/cima1-integration/api/v1/": "<<ANON_UNIXPATH_11>>",
+      "/${userId}/sidebar/${missionId}`;": "<<ANON_UNIXPATH_12>>",
+      "//": "<<ANON_UNIXPATH_13>>",
+      "/${user.id}/publicholidays`);": "<<ANON_UNIXPATH_14>>",
+      "/${user.id}/weekenddays`);": "<<ANON_UNIXPATH_15>>",
+      "/${user.id}/leaves`;": "<<ANON_UNIXPATH_16>>"
+    },
+    "USERNAME": {
+      "Dto": "<<ANON_USERNAME_1>>",
+      "Id": "<<ANON_USERNAME_2>>",
+      "s": "<<ANON_USERNAME_3>>",
+      "UserDto": "<<ANON_USERNAME_4>>"
+    }
+  },
+  "reverse": {
+    "<<ANON_UNIXPATH_1>>": "/common/http",
+    "<<ANON_UNIXPATH_2>>": "/core",
+    "<<ANON_UNIXPATH_3>>": "/constants/date.formats",
+    "<<ANON_UNIXPATH_4>>": "/models/generated/cima1integration/CiMaCiMa1IntegrationServiceModelsV1Model",
+    "<<ANON_UNIXPATH_5>>": "/models/generated/identity/CiMaSharedServicesIdentityServiceV1DtoModel",
+    "<<ANON_UNIXPATH_6>>": "/components/dutytrip-widget-calendar/MarkedDate",
+    "<<ANON_UNIXPATH_7>>": "/domain/dutytrip.mappers",
+    "<<ANON_UNIXPATH_8>>": "/helpers/string-helper",
+    "<<ANON_UNIXPATH_9>>": "/app/core/interceptors/http.tokens",
+    "<<ANON_UNIXPATH_10>>": "/cima1-menu-mapper.service",
+    "<<ANON_UNIXPATH_11>>": "/cima1-integration/api/v1/",
+    "<<ANON_UNIXPATH_12>>": "/${userId}/sidebar/${missionId}`;",
+    "<<ANON_UNIXPATH_13>>": "//",
+    "<<ANON_UNIXPATH_14>>": "/${user.id}/publicholidays`);",
+    "<<ANON_UNIXPATH_15>>": "/${user.id}/weekenddays`);",
+    "<<ANON_UNIXPATH_16>>": "/${user.id}/leaves`;",
+    "<<ANON_USERNAME_1>>": "Dto",
+    "<<ANON_USERNAME_2>>": "Id",
+    "<<ANON_USERNAME_3>>": "s",
+    "<<ANON_USERNAME_4>>": "UserDto",
+    "<<ANON_WORD_1>>": "CiMA"
+  },
+  "words": [
+    "cima",
+    "mission"
+  ],
+  "word_map": {
+    "CiMA": "<<ANON_WORD_1>>"
+  }
+}
