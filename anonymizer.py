@@ -85,10 +85,12 @@ def anonymize_text(text: str, mapping_obj: dict) -> str:
     exclusions = mapping_obj.get("exclusions", [])
     if words:
         ex_set = {x.lower() for x in exclusions}
-        # Sort longest first so multi-word phrases match before their parts
+        # Sort longest first so multi-word phrases match before their parts.
+        # No \b anchors: custom terms must also match when embedded inside
+        # larger words or identifiers (e.g. OPLAN inside ApprovedPostsInOPLAN).
         all_items = sorted(words + exclusions, key=len, reverse=True)
         word_pattern = re.compile(
-            r"\b(" + "|".join(re.escape(w) for w in all_items) + r")\b",
+            "(" + "|".join(re.escape(w) for w in all_items) + ")",
             re.IGNORECASE,
         )
         # Recompute protected spans on the partially-anonymized text
