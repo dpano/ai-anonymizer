@@ -1,0 +1,217 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>Anonymizer UI</title><style>
+body{font-family:system-ui,Segoe UI,Roboto,Arial;margin:0;display:flex;height:100vh;overflow:hidden}
+.sidebar{width:240px;background:#f5f5f5;border-right:1px solid #ddd;display:flex;flex-direction:column;transition:margin-left 0.3s}
+.sidebar.collapsed{margin-left:-240px}
+.sidebar-header{padding:12px;font-weight:bold;border-bottom:1px solid #ddd;display:flex;justify-content:space-between;align-items:center}
+.project-list{flex:1;overflow-y:auto;padding:8px}
+.project-item{padding:8px;margin-bottom:4px;cursor:pointer;border-radius:4px;display:flex;justify-content:space-between;align-items:center}
+.project-item:hover{background:#e0e0e0}
+.project-item.active{background:#0078d4;color:white}
+.main-content{flex:1;display:flex;flex-direction:column;padding:12px;overflow:hidden}
+.container{display:grid;grid-template-columns:1fr 1fr 280px;gap:12px;flex:1;overflow:hidden}
+textarea, .output-box{width:100%;height:70vh;font-family:monospace;font-size:13px;line-height:1.5;padding:8px;box-sizing:border-box;border:1px solid #767676;border-radius:2px;}
+.output-box{overflow-y:auto;white-space:pre-wrap;background:#fff;word-wrap:break-word;height:calc(70vh - 24px);}
+mark{background:#fff3cd;color:#856404;font-weight:bold;padding:0 2px;border-radius:2px;border:1px solid #ffeeba; cursor:pointer; transition:background 0.2s;}
+mark:hover{background:#ffeeba; border-color:#f5c6cb;}
+.controls{display:flex;gap:8px;margin-bottom:8px}button{padding:6px 10px; cursor:pointer;}.right-col{display:flex;flex-direction:column}.small{font-size:12px;color:#444;margin-top:6px}
+.btn-del{background:none;border:none;color:inherit;cursor:pointer;font-weight:bold;padding:0 4px}
+.btn-del:hover{color:#ff4d4d}
+</style></head><body>
+<div id="sidebar" class="sidebar">
+  <div class="sidebar-header"><span>Projects</span></div>
+  <div id="project-list" class="project-list"></div>
+  <div style="padding:12px;border-top:1px solid #ddd">
+    <input id="new-project" type="text" placeholder="New project..." style="width:100%;margin-bottom:8px;padding:4px;box-sizing:border-box">
+    <button id="add-project" style="width:100%">+ Add Project</button>
+  </div>
+</div>
+<div class="main-content">
+  <div class="controls">
+    <button id="toggle-sb">☰</button>
+    <button id="anon">Anonymize →</button>
+    <button id="deanon">← Deanonymize</button>
+    <button id="download">Download mapping</button>
+    <input type="file" id="loadmap" style="display:none"/>
+    <button id="loadbtn">Load JSON</button>
+    <button id="clear">Clear Mapping</button>
+    <span id="active-name" style="margin-left:auto;font-weight:bold;align-self:center;color:#0078d4"></span>
+  </div>
+  <div class="container">
+    <div><label><strong>Input</strong></label><textarea id="input" spellcheck="false"></textarea></div>
+
+    <div style="display: flex; flex-direction: column;">
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 2px;">
+         <label><strong>Output (Click tags to locate in input)</strong></label>
+         <button id="copy-btn" style="padding: 2px 8px; font-size: 12px; height: 22px;">Copy</button>
+      </div>
+      <div id="output" class="output-box" spellcheck="false"></div>
+    </div>
+
+    <div class="right-col">
+      <label><strong>Custom words</strong></label>
+      <textarea id="words" spellcheck="false" style="height:30vh"></textarea>
+      <label style="margin-top:12px"><strong>Exclusions</strong></label>
+      <textarea id="exclusions" style="height:30vh" spellcheck="false"></textarea>
+      <div class="small">Settings are saved per project to browser storage and disk.</div>
+    </div>
+  </div>
+</div>
+<script>
+async function post(path, body){ const r=await fetch(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}); return r.json(); }
+
+let currentProject = 'default';
+let appMapping = null;
+let lastOutputText = '';
+
+function renderOutput(text) {
+  lastOutputText = text || '';
+  const outEl = document.getElementById('output');
+  if(!text) { outEl.innerHTML = ''; return; }
+  let escaped = text.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  escaped = escaped.replace(/(ANON_[A-Za-z0-9_]+)/g, '<mark>$1</mark>');
+  outEl.innerHTML = escaped;
+}
+
+// Click listener to find tags in the original text and visually scroll to them
+document.getElementById('output').addEventListener('click', (e) => {
+  if (e.target.tagName === 'MARK') {
+    const token = e.target.textContent;
+    if (appMapping && appMapping.reverse && appMapping.reverse[token]) {
+      const originalText = appMapping.reverse[token];
+      const inputEl = document.getElementById('input');
+      const idx = inputEl.value.indexOf(originalText);
+      if (idx !== -1) {
+        inputEl.focus();
+        inputEl.setSelectionRange(idx, idx + originalText.length);
+        const clone = document.createElement('div');
+        clone.style.width = inputEl.clientWidth + 'px';
+        clone.style.fontFamily = 'monospace';
+        clone.style.fontSize = '13px';
+        clone.style.lineHeight = '1.5';
+        clone.style.padding = '8px';
+        clone.style.boxSizing = 'border-box';
+        clone.style.whiteSpace = 'pre-wrap';
+        clone.style.wordWrap = 'break-word';
+        clone.style.position = 'absolute';
+        clone.style.visibility = 'hidden';
+        clone.textContent = inputEl.value.substring(0, idx) + 'X';
+        document.body.appendChild(clone);
+        inputEl.scrollTop = clone.offsetHeight - (inputEl.clientHeight / 2);
+        clone.remove();
+      }
+    }
+  }
+});
+
+document.getElementById('copy-btn').addEventListener('click', async () => {
+  if (!lastOutputText) return;
+  try {
+    await navigator.clipboard.writeText(lastOutputText);
+    showCopied();
+  } catch (err) {
+    const textArea = document.createElement("textarea");
+    textArea.value = lastOutputText;
+    document.body.appendChild(textArea);
+    textArea.select();
+    document.execCommand("Copy");
+    textArea.remove();
+    showCopied();
+  }
+});
+
+function showCopied() {
+  const btn = document.getElementById('copy-btn');
+  btn.textContent = 'Copied!';
+  setTimeout(() => btn.textContent = 'Copy', 2000);
+}
+
+async function loadState() {
+  const state = await (await fetch('/get_state')).json();
+  appMapping = state.mapping;
+  currentProject = state.active_project;
+  document.getElementById('input').value = appMapping.last_input || '';
+  renderOutput(appMapping.last_output || '');
+  document.getElementById('active-name').textContent = `Project: ${currentProject}`;
+  document.getElementById('words').value = localStorage.getItem(`words_${currentProject}`) || '';
+  document.getElementById('exclusions').value = localStorage.getItem(`exs_${currentProject}`) || '';
+  renderProjects(state.projects);
+}
+
+function renderProjects(projects) {
+  const list = document.getElementById('project-list');
+  list.innerHTML = '';
+  Object.keys(projects).forEach(name => {
+    const div = document.createElement('div');
+    div.className = `project-item ${name === currentProject ? 'active' : ''}`;
+    div.onclick = () => switchProject(name);
+    div.innerHTML = `<span>${name}</span>${name !== 'default' ? `<button class="btn-del" onclick="event.stopPropagation(); deleteProject('${name}')">×</button>` : ''}`;
+    list.appendChild(div);
+  });
+}
+
+async function switchProject(name) {
+  await post('/switch_project', {name});
+  await loadState();
+}
+
+async function addProject() {
+  const name = document.getElementById('new-project').value.trim();
+  if(!name) return;
+  await post('/add_project', {name});
+  document.getElementById('new-project').value = '';
+  await loadState();
+}
+
+async function deleteProject(name) {
+  if(!confirm(`Delete project "${name}"?`)) return;
+  await post('/delete_project', {name});
+  await loadState();
+}
+
+window.onload = async () => {
+  await loadState();
+  const w=document.getElementById('words'), ex=document.getElementById('exclusions');
+  const s=()=>{ localStorage.setItem(`words_${currentProject}`, w.value); localStorage.setItem(`exs_${currentProject}`, ex.value); };
+  w.oninput=s; w.onblur=s; ex.oninput=s; ex.onblur=s;
+};
+
+document.getElementById('toggle-sb').onclick = () => document.getElementById('sidebar').classList.toggle('collapsed');
+document.getElementById('add-project').onclick = addProject;
+
+document.getElementById('anon').onclick = async ()=>{
+  const inp = document.getElementById('input').value;
+  const words = document.getElementById('words').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  const exclusions = document.getElementById('exclusions').value.split(/\r?\n/).map(s=>s.trim()).filter(Boolean);
+  const res = await post('/anonymize',{text:inp, words: words, exclusions: exclusions});
+  const state = await (await fetch('/get_state')).json();
+  appMapping = state.mapping;
+  renderOutput(res.result);
+};
+
+document.getElementById('deanon').onclick = async ()=>{
+  const inp = document.getElementById('input').value;
+  const res = await post('/deanonymize',{text:inp});
+  renderOutput(res.result);
+};
+
+document.getElementById('download').onclick = async ()=>{
+  const r = await fetch('/download_mapping');
+  const blob = await r.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a'); a.href = url; a.download = 'mapping.json'; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+};
+
+document.getElementById('loadbtn').onclick = ()=> document.getElementById('loadmap').click();
+document.getElementById('loadmap').onchange = async (e)=>{
+  const f = e.target.files[0]; if(!f) return;
+  const txt = await f.text();
+  try{ const parsed = JSON.parse(txt); const resp = await post('/load_mapping', {mapping: parsed}); alert(resp.status); }catch(err){ alert('Invalid JSON'); }
+};
+
+document.getElementById('clear').onclick = async ()=>{
+  if(!confirm('Clear mapping (irreversible in this session)?')) return;
+  await post('/clear_mapping', {}); alert('Mapping cleared.');
+  await loadState();
+};
+</script></body></html>
